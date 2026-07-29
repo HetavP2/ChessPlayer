@@ -6,15 +6,20 @@ from keras.layers import Dense, Flatten
 from keras.models import Sequential, load_model
 
 from chessplayer.encoder import BoardEncoder
+from chessplayer.game import count_material, material_minimax
 
 
 class ChessModel:
     def __init__(self, model=None):
         self.encoder = BoardEncoder()
         self.model = model
+        # How many plies of captures/recaptures to look at when scoring material.
+        # 1 = catch pieces that simply hang; 2 = also resolve simple trades.
+        self.material_search_depth = 2
 
     def train(self, data_path='data/train.csv'):
         train_data = pd.read_csv(data_path, index_col='id')
+        train_data['total_material'] = train_data['board'].apply(count_material)
         val_data = train_data[-1000:]
         train_data = train_data[:20000]
 
@@ -56,25 +61,34 @@ class ChessModel:
         board = chess.Board(fen=fen)
 
         moves = []
+        possible_boards = []
         input_vectors = []
 
         for move in board.legal_moves:
             possible_board = board.copy()
             possible_board.push(move)
             moves.append(move)
+            possible_boards.append(possible_board)
             input_vectors.append(self.encoder.one_hot_encode_board(possible_board).astype(np.int32))
 
         input_vectors = np.stack(input_vectors)
 
-        scores = self.model.predict(input_vectors, verbose=0)
+        scores = self.model.predict(input_vectors, verbose=0).reshape(-1)
+
+        # Material outcome (Black's perspective) after the opponent's best move
+        material_scores = np.array([
+            100 * material_minimax(possible_board, self.material_search_depth)
+            for possible_board in possible_boards
+        ])
+        combined = scores + material_scores
 
         if board.turn == chess.BLACK:
-            index_of_best_move = np.argmax(scores)
+            index_of_best_move = np.argmax(combined)
         else:
-            index_of_best_move = np.argmax(-scores)
+            index_of_best_move = np.argmin(combined)
 
         if show_move_evaluations:
-            print(zip(moves, scores))
+            print(list(zip(moves, scores, material_scores)))
 
         best_move = moves[index_of_best_move]
 
