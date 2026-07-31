@@ -1,6 +1,14 @@
 from chessplayer.model import ChessModel
 from chessplayer.game import ChessGame
 
-model = ChessModel.load('./models/chess_model.keras')
+MODEL_PATH = './models/chess_model.keras'
+
+model = ChessModel.load(MODEL_PATH)
 game = ChessGame()
-game.play(model.play_nn)
+
+positions, result_value = game.play(model.play_nn)
+
+print('\nUpdating the model from this game...')
+model.learn_from_game(positions, result_value)
+model.save(MODEL_PATH)
+print('Model updated and saved.')

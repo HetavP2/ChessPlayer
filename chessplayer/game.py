@@ -36,9 +36,7 @@ def material_balance(fen):
 
 
 def material_minimax(board, depth):
-    # Best-case material balance (Black's perspective) after `depth` plies of
-    # both sides grabbing/defending material as well as they can. Used to see,
-    # before committing to a move, whether a piece just hangs or is a fair trade.
+    # Best-case material balance (Black's perspective)
     if board.is_checkmate():
         return 1000 if board.turn == chess.WHITE else -1000
     if depth == 0 or board.is_game_over():
@@ -59,6 +57,8 @@ class ChessGame:
 
     def play(self, model_fcn):
         chess_board = self.chess_board
+        positions = [chess_board.fen()]
+        quit_game = False
         print('Welcome to Chess \n')
         while chess_board.outcome() is None:
             print(chess_board)
@@ -66,16 +66,29 @@ class ChessGame:
             if chess_board.turn == chess.WHITE:
                 user_move = input('Enter your move (e.g. d2d4, quit): ')
                 if user_move == 'quit':
+                    quit_game = True
                     break
                 while user_move not in [str(move) for move in chess_board.legal_moves]:
                     print('Invalid move, enter again in Standard Algebraic Notation')
                     user_move = input('Enter your move (e.g. d2d4, quit): ')
 
-                chess_board.push_san(user_move)
+                chess_board.push_uci(user_move)
 
             elif chess_board.turn == chess.BLACK:
                 model_move = model_fcn(chess_board.fen())
                 print(f'Model chose move: {model_move}')
-                chess_board.push_san(model_move)
+                chess_board.push_uci(model_move)
+
+            positions.append(chess_board.fen())
 
         print(chess_board.outcome())
+        return positions, self.result_value(quit_game)
+
+    def result_value(self, quit_game, win_value=1000):
+        # Training signal from Black's perspective: win = + win_value, loss = -win_value, draw = 0. quit = look at material
+        outcome = self.chess_board.outcome()
+        if outcome is not None and outcome.winner is not None:
+            return win_value if outcome.winner == chess.BLACK else -win_value
+        if outcome is not None:
+            return 0
+        return 100 * material_balance(self.chess_board.fen())

@@ -41,8 +41,19 @@ class ChessModel:
             loss='mean_squared_error'
         )
 
-        self.model.fit(X_train, y_train, epochs=50, validation_data=(X_val, y_val))
+        self.model.fit(X_train, y_train, epochs=2, validation_data=(X_val, y_val))
         return self.model
+
+    def learn_from_game(self, positions, result_value, epochs=3, gamma=0.95):
+        # Monte-Carlo value: label positions game passed through, earlier positions count less, then take a few gradient steps toward it.
+        if not positions:
+            return
+
+        X = np.stack([self.encoder.encode_fen_string(fen) for fen in positions])
+        n = len(positions)
+        y = np.array([result_value * (gamma ** (n - 1 - i)) for i in range(n)])
+
+        self.model.fit(X, y, epochs=epochs, verbose=0)
 
     def save(self, path='./models/chess_model.keras'):
         self.model.save(path)
